@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Rest of your custom styles remain the same */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+@layer components {
+  .editor-container {
+    @apply h-[70vh] border border-gray-300 mb-4;
+  }
+  .tool-container {
+    @apply p-5 mb-5;
+  }
+  .avatar {
+    @apply w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm;
+  }
+}
