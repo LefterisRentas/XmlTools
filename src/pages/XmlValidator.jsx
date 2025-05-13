@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import Editor from '@monaco-editor/react'
 import { XMLValidator } from 'fast-xml-parser'
+import SaveDialog from '../components/SaveDialog'
+import SavedDocuments from '../components/SavedDocuments'
 
 const XmlValidator = () => {
   const [xmlContent, setXmlContent] = useState(
@@ -14,6 +16,19 @@ const XmlValidator = () => {
 
   const [validateXMLFn, setValidateXMLFn] = useState(null)
   const [loadingValidator, setLoadingValidator] = useState(true)
+  
+  const [showSaveXmlDialog, setShowSaveXmlDialog] = useState(false)
+  const [showSaveXsdDialog, setShowSaveXsdDialog] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+  const [activeTab, setActiveTab] = useState('xml')
+  
+  // Get user information from localStorage
+  const getUserInfo = () => {
+    const storedUser = localStorage.getItem('user')
+    return storedUser ? JSON.parse(storedUser) : null
+  }
+  
+  const user = getUserInfo()
 
   useEffect(() => {
     let cancelled = false
@@ -108,16 +123,80 @@ const XmlValidator = () => {
     setValidationResult(null)
     setIsValid(null)
   }
+  
+  const handleSaveDocument = async (title, type) => {
+    try {
+      if (!user) {
+        throw new Error('You must be logged in to save documents')
+      }
+      
+      let content;
+      if (type === 'xml') {
+        content = xmlContent;
+      } else if (type === 'xsd') {
+        content = xsdContent;
+      } else {
+        throw new Error('Invalid document type');
+      }
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/documents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.profile.sub,
+          title,
+          type,
+          content
+        }),
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to save document')
+      }
+      
+      setValidationResult(`${type.toUpperCase()} document saved successfully!`)
+      setIsValid(true)
+    } catch (error) {
+      console.error('Error saving document:', error)
+      setSaveError(error.message)
+      throw error
+    }
+  }
+  
+  const handleLoadDocument = (document) => {
+    if (document.type === 'xml') {
+      setXmlContent(document.content)
+      setValidationResult(null)
+      setIsValid(null)
+    } else if (document.type === 'xsd') {
+      setXsdContent(document.content)
+      setValidationResult(null)
+      setIsValid(null)
+    }
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white rounded-lg shadow-md">
       <h2 className="text-2xl font-bold mb-4 text-gray-800">XML + XSD Validator</h2>
-      <p className="text-gray-600 mb-6">Paste your XML and (optionally) an XSD below, then click “Validate”.</p>
+      <p className="text-gray-600 mb-6">Paste your XML and (optionally) an XSD below, then click "Validate".</p>
 
       <div className="flex flex-wrap -mx-2 mb-6">
         <div className="w-full md:w-1/2 px-2 mb-4 md:mb-0">
           <div className="mb-4">
-            <h5 className="text-lg font-semibold mb-2 text-gray-700">XML</h5>
+            <div className="flex justify-between items-center mb-2">
+              <h5 className="text-lg font-semibold text-gray-700">XML</h5>
+              {user && (
+                <button 
+                  className="text-sm bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded" 
+                  onClick={() => setShowSaveXmlDialog(true)}
+                >
+                  Save XML
+                </button>
+              )}
+            </div>
             <div className="h-[200px] border border-gray-300 rounded-md overflow-hidden">
               <Editor
                 defaultLanguage="xml"
@@ -137,7 +216,17 @@ const XmlValidator = () => {
 
         <div className="w-full md:w-1/2 px-2">
           <div className="mb-4">
-            <h5 className="text-lg font-semibold mb-2 text-gray-700">XSD Schema</h5>
+            <div className="flex justify-between items-center mb-2">
+              <h5 className="text-lg font-semibold text-gray-700">XSD Schema</h5>
+              {user && (
+                <button 
+                  className="text-sm bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded" 
+                  onClick={() => setShowSaveXsdDialog(true)}
+                >
+                  Save XSD
+                </button>
+              )}
+            </div>
             <div className="h-[200px] border border-gray-300 rounded-md overflow-hidden">
               <Editor
                 defaultLanguage="xml"
@@ -156,7 +245,7 @@ const XmlValidator = () => {
         </div>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6 flex space-x-3">
         <button
           className={`px-4 py-2 rounded-md transition-colors ${
             loadingValidator
@@ -175,6 +264,15 @@ const XmlValidator = () => {
             'Validate'
           )}
         </button>
+        
+        {user && (
+          <button 
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md" 
+            onClick={() => setActiveTab(activeTab === 'xml' ? 'xsd' : 'xml')}
+          >
+            View Saved Documents
+          </button>
+        )}
       </div>
 
       {validationResult && (
@@ -185,6 +283,37 @@ const XmlValidator = () => {
           style={{ whiteSpace: 'pre-wrap' }}
         >
           {validationResult}
+        </div>
+      )}
+      
+      {/* Save Dialogs */}
+      <SaveDialog 
+        isOpen={showSaveXmlDialog} 
+        onClose={() => setShowSaveXmlDialog(false)} 
+        onSave={handleSaveDocument} 
+        documentType="xml" 
+        error={saveError} 
+      />
+      
+      <SaveDialog 
+        isOpen={showSaveXsdDialog} 
+        onClose={() => setShowSaveXsdDialog(false)} 
+        onSave={handleSaveDocument} 
+        documentType="xsd" 
+        error={saveError} 
+      />
+      
+      {/* Saved Documents Section */}
+      {user && (
+        <div className="mt-6 border-t pt-4">
+          <h3 className="text-lg font-medium mb-3">Your Saved Documents</h3>
+          <SavedDocuments 
+            userId={user.profile.sub} 
+            documentType={activeTab} 
+            onLoadDocument={handleLoadDocument} 
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+          />
         </div>
       )}
     </div>
